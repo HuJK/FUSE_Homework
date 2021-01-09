@@ -149,11 +149,9 @@ static int do_getattr( const char *path, struct stat *st )
 	cout << "GET\t" << path;
 	if(map_has_key(&parent->folders,name)){
 		memcpy(st,&(get_subfolder(parent,name)->attr),sizeof(struct stat));
-		st->st_mode;
 	}
 	else if(map_has_key(&parent->files,name)){
 		memcpy(st,&parent->files[name]->attr,sizeof(struct stat));
-		st->st_size= parent->files[name]->body.length();
 	}
 	else{
 		cout << "\tErr\n";
@@ -272,6 +270,7 @@ static int do_write( const char *path, const char *buffer, size_t size, off_t of
 	memcpy( &f->body[offset],buffer,size);
 
 	f->attr.st_size = f->body.length();
+	f->attr.st_blocks = f->body.length() /512 +1;
 	cout << "\tOK\n";
 	return size;
 }
@@ -291,6 +290,7 @@ static int do_truncate( const char path[], off_t new_length)
 	f->body.resize(new_length,'\0');
 
 	f->attr.st_size = f->body.length();
+	f->attr.st_blocks = f->body.length() / 512 +1;
 	cout << "\tOK\n";
 	return 0;
 }
@@ -428,6 +428,7 @@ int main( int argc, char *argv[] )
 	defaultattr.st_atime = time( NULL ); // The last "a"ccess of the file/directory is right now
 	defaultattr.st_mtime = time( NULL ); // The last "m"odification of the file/directory is right now
 	defaultattr.st_size = 4096;
+	defaultattr.st_blksize = 1;
 	memcpy(&defaultfileattr,&defaultattr,sizeof(struct stat));
 	defaultfileattr.st_nlink = 1;
 	defaultfileattr.st_mode = 0777 | S_IFREG ;
