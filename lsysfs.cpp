@@ -10,6 +10,7 @@
  
 #define FUSE_USE_VERSION 30
 
+
 #include <fuse.h>
 #include <stdio.h>
 #include <unistd.h>
@@ -27,6 +28,10 @@
 #include <iostream>
 #include <vector>
 using namespace std;
+
+ostream nullstream(0);
+ostream& fakecout = nullstream;
+//#define cout fakecout
 
 char dir_list[ 256 ][ 256 ];
 int curr_dir_idx = -1;
@@ -151,7 +156,6 @@ static int do_getattr( const char *path, struct stat *st )
 		st->st_size= parent->files[name]->body.length();
 	}
 	else{
-		memcpy(st,&defaultattr,sizeof(struct stat));
 		cout << "\tErr\n";
 		return -ENOENT;
 	}
@@ -262,18 +266,35 @@ static int do_write( const char *path, const char *buffer, size_t size, off_t of
 	}
 	file* f = parent->files[name];
 	size_t body_len = f->body.length();
-	string buffer_str = string(buffer,size);
 	if(size + offset > body_len){
-		f->body = f->body.substr(0,offset) + buffer_str;
+		f->body.resize(size + offset);
 	}
-	else{
-		f->body = f->body.substr(0,offset) + buffer_str + f->body.substr(offset + size);
-	}
+	memcpy( &f->body[offset],buffer,size);
 
 	f->attr.st_size = f->body.length();
 	cout << "\tOK\n";
 	return size;
 }
+
+static int do_truncate( const char path[], off_t new_length)
+{
+	cout << "TRUN\t" << path;
+	auto parentinfo = get_parent(path);
+	auto parent = parentinfo.first;
+	auto name = parentinfo.second;
+	if(! map_has_key(&parent->files,name)){
+		cout << "\tErr\n";
+		return -ENOENT;
+	}
+	file* f = parent->files[name];
+
+	f->body.resize(new_length,'\0');
+
+	f->attr.st_size = f->body.length();
+	cout << "\tOK\n";
+	return 0;
+}
+
 static int do_unlink (const char* path){
 	cout << "DEL\t" << path;
 	auto parentinfo = get_parent(path);
@@ -315,12 +336,10 @@ static int do_rename (const char* path_old, const char* path_new){
 	auto parent_new = parentinfo_new.first;
 	auto name_new = parentinfo_new.second;
 	if( map_has_key(&parent_new->folders,name_new)){
-		cout << "\tErr\n";
-		return -EEXIST;
+		do_rmdir(path_new);
 	}
 	else if(map_has_key(&parent_new->files,name_new)){
-		cout << "\tErr\n";
-		return -EEXIST;
+		do_unlink(path_new);
 	}
 
 	//move 
@@ -389,9 +408,10 @@ static struct fuse_operations operations = {
 	.rename     = do_rename,
 	.chmod      = do_chmod,
 	.chown      = do_chown,
+	.truncate   = do_truncate,
 	.read		= do_read,
-	.write		= do_write,
-    .readdir	= do_readdir,
+	.write      = do_write,
+    .readdir    = do_readdir,
 };
 
 int main( int argc, char *argv[] )
@@ -407,6 +427,7 @@ int main( int argc, char *argv[] )
 	defaultattr.st_nlink = 2;
 	defaultattr.st_atime = time( NULL ); // The last "a"ccess of the file/directory is right now
 	defaultattr.st_mtime = time( NULL ); // The last "m"odification of the file/directory is right now
+	defaultattr.st_size = 4096;
 	memcpy(&defaultfileattr,&defaultattr,sizeof(struct stat));
 	defaultfileattr.st_nlink = 1;
 	defaultfileattr.st_mode = 0777 | S_IFREG ;
