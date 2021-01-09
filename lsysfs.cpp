@@ -439,7 +439,7 @@ int main( int argc, char *argv[] )
 
 	invalid->valid = false;
 	invalid_file->valid = false;
-	void* testbuf = malloc(10000);
+	//void* testbuf = malloc(10000);
 	//do_getattr("/", (struct stat*)testbuf );
 
 	return fuse_main( argc, argv, &operations, NULL );
